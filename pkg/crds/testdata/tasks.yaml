@@ -1,0 +1,30 @@
+apiVersion: tekton.dev/v1alpha1
+kind: Task
+metadata:
+  name: sample
+spec:
+  inputs:
+    params:
+    - name: FOO
+      description: FOO variable
+  steps:
+  - name: foo
+    image: alpine
+    command: ['echo', 'hello foo']
+  - name: bar
+    image: alpine
+    command: ['echo', 'hello bar']
+---
+apiVersion: tekton.dev/v1alpha1
+kind: Task
+metadata:
+  name: another_sample
+spec:
+  inputs:
+    params:
+    - name: FOO
+      description: FOO variable
+  steps:
+  - name: alpine
+    image: alpine
+    command: ['echo', 'hello from alpine']
