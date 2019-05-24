@@ -1,12 +1,16 @@
 package crds
 
 import (
-	_ "reflect"
+	"os"
 	"testing"
 )
 
 func TestParseCRDs(t *testing.T) {
-	crds, err := ParseCRDs("testdata")
+	r, err := os.Open("testdata/pipeline.yaml")
+	if err != nil {
+		t.Fatal("Failed to open testdata/pipeline.yaml", err)
+	}
+	crds, err := ParseCRDs(r)
 	if err != nil {
 		t.Fatal("Failed to parse CRDs", err)
 	}

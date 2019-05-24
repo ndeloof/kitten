@@ -9,6 +9,7 @@ import (
 	pipeline "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1alpha1"
 	"github.com/tektoncd/pipeline/pkg/reconciler/v1alpha1/pipeline/dag"
 
+	"flag"
 	"fmt"
 	"github.com/docker/docker/client"
 	"github.com/ndeloof/kitten/pkg/crds"
@@ -17,11 +18,33 @@ import (
 )
 
 func main() {
-	_, err := crds.ParseCRDs("tekton.yaml")
+
+	var file string
+	var pname string
+	flag.StringVar(&file, "file", "pipeline.yaml", "Path to Tekton pipeline CRDs")
+	flag.StringVar(&pname, "pipeline", "", "Pipeline to run (if more than one defined)")
+	flag.Parse()
+
+	r, err := os.Open(file)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Can't open file %s", file)
+		os.Exit(1)
+	}
+	defer r.Close()
+
+	crds, err := crds.ParseCRDs(r)
 	if err != nil {
 		fmt.Println(err.Error())
 		os.Exit(1)
 	}
+
+	pipe := crds.Pipelines[pname]
+	if pname == "" && len(crds.Pipelines) == 1 {
+		for _, p := range crds.Pipelines {
+			pipe = p
+		}
+	}
+	spec := pipe.Spec.Tasks
 
 	cli, err := client.NewClientWithOpts(client.FromEnv)
 	if err != nil {
@@ -30,7 +53,6 @@ func main() {
 
 	ctx := context.Background()
 
-	spec := []pipeline.PipelineTask{}
 	graph, err := pipeline.BuildDAG(spec)
 	if err != nil {
 		panic("invalid pipeline 🤕 " + err.Error())
@@ -49,11 +71,12 @@ func main() {
 		}
 
 		for _, pt := range tasks {
-			// name := pt.TaskRef.Name
-			// Retrieve the matching Task CRD
-
-			task := pipeline.Task{}
+			task, ok := crds.Tasks[pt.TaskRef.Name]
+			if !ok {
+				panic("Pipeline TaskRef has no matching Task 🤭 " + pt.TaskRef.Name)
+			}
 			status, err := RunTask(ctx, pt, task, cli)
+			completed = append(completed, pt.Name)
 			if err != nil {
 				panic("Failed to run ☠️ " + err.Error())
 			}
@@ -68,7 +91,7 @@ func main() {
 func RunTask(ctx context.Context, pt pipeline.PipelineTask, task pipeline.Task, cli client.APIClient) (int, error) {
 	fmt.Printf("Running Pipeline Task %s\n", pt.Name)
 	for _, s := range task.Spec.Steps {
-		fmt.Printf("--- %s\n", s.Name)
+		fmt.Printf("--- running Step %s\n", s.Name)
 		cmd := strslice.StrSlice{}
 		cmd = append(cmd, s.Command...)
 		cmd = append(cmd, s.Args...)
