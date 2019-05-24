@@ -9,7 +9,6 @@ import (
 	pipeline "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1alpha1"
 	"github.com/tektoncd/pipeline/pkg/reconciler/v1alpha1/pipeline/dag"
 
-	"flag"
 	"fmt"
 	"github.com/docker/docker/client"
 	"github.com/ndeloof/kitten/pkg/crds"
@@ -18,52 +17,56 @@ import (
 )
 
 func main() {
+	args := os.Args
+	if len(args) == 0 {
+		fmt.Println("Usage: kitten <crds> [<name>]")
+		fmt.Println("args:")
+		fmt.Println(" - crds: a (multi-documents) yaml file containing CRDs to define your Tekton pipeline")
+		fmt.Println(" - name: name of the pipeline to run. Optional if CRDs only define a single pipeline")
+	}
 
-	var file string
+	file := args[1]
 	var pname string
-	flag.StringVar(&file, "file", "pipeline.yaml", "Path to Tekton pipeline CRDs")
-	flag.StringVar(&pname, "pipeline", "", "Pipeline to run (if more than one defined)")
-	flag.Parse()
+	if len(args) > 2 {
+		pname = args[2]
+	}
 
 	r, err := os.Open(file)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Can't open file %s", file)
-		os.Exit(1)
-	}
+	check(err, "Can't open CRDs file %s 😖", file)
 	defer r.Close()
 
 	crds, err := crds.ParseCRDs(r)
-	if err != nil {
-		fmt.Println(err.Error())
-		os.Exit(1)
-	}
+	check(err, "Failed to parse CRDs 😖")
 
-	pipe := crds.Pipelines[pname]
-	if pname == "" && len(crds.Pipelines) == 1 {
-		for _, p := range crds.Pipelines {
-			pipe = p
+	pipe, err := crds.GetPipeline(pname)
+	check(err, "No pipeline found with name '%s' 🤗", pname)
+	spec := pipe.Spec
+
+	for _, r := range spec.Resources {
+		pr, ok := crds.PipelineResources[r.Name]
+		checkOk(ok, "No resource with name '%s' 🤗", r.Name)
+		switch pr.Spec.Type {
+		case "git":
+			// TODO checkout
+			fmt.Println("init git resource ...")
+		case "image":
+			// TODO docker pull
+			fmt.Println("init image resource ...")
 		}
 	}
-	spec := pipe.Spec.Tasks
 
 	cli, err := client.NewClientWithOpts(client.FromEnv)
-	if err != nil {
-		panic("no docker 🐳 " + err.Error())
-	}
+	check(err, "Failed to setup docker client 🐳")
 
 	ctx := context.Background()
 
-	graph, err := pipeline.BuildDAG(spec)
-	if err != nil {
-		panic("invalid pipeline 🤕 " + err.Error())
-	}
+	graph, err := pipeline.BuildDAG(spec.Tasks)
+	check(err, "Invalid pipeline definition 🤕")
 	completed := []string{}
 
 	for {
 		tasks, err := dag.GetSchedulable(graph, completed...)
-		if err != nil {
-			panic("we did it wrong 🤨 " + err.Error())
-		}
+		check(err, "Hum... sorry, we did it wrong 🤨")
 
 		if len(tasks) == 0 {
 			// We are done
@@ -72,14 +75,10 @@ func main() {
 
 		for _, pt := range tasks {
 			task, ok := crds.Tasks[pt.TaskRef.Name]
-			if !ok {
-				panic("Pipeline TaskRef has no matching Task 🤭 " + pt.TaskRef.Name)
-			}
+			checkOk(ok, "Pipeline TaskRef has no matching Task %s 🤭 ", pt.TaskRef.Name)
 			status, err := RunTask(ctx, pt, task, cli)
 			completed = append(completed, pt.Name)
-			if err != nil {
-				panic("Failed to run ☠️ " + err.Error())
-			}
+			check(err, "Failed to run task ☠️")
 			if status != 0 {
 				os.Exit(status)
 			}
@@ -157,4 +156,22 @@ func RunTask(ctx context.Context, pt pipeline.PipelineTask, task pipeline.Task, 
 		}
 	}
 	return 0, nil
+}
+
+func check(err error, message string, s ...interface{}) {
+	if err != nil {
+		fmt.Fprintf(os.Stderr, message, s...)
+		fmt.Println()
+		fmt.Fprintf(os.Stderr, err.Error())
+		fmt.Println()
+		os.Exit(1)
+	}
+}
+
+func checkOk(ok bool, message string, s ...interface{}) {
+	if !ok {
+		fmt.Fprintf(os.Stderr, message, s...)
+		fmt.Println()
+		os.Exit(1)
+	}
 }
