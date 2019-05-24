@@ -4,4 +4,5 @@ go:
 
 build:
   ci:
+    - go get -d -v
     - go build
