@@ -11,6 +11,7 @@ import (
 
 // CRDs is a holder for a set of Tekton CRDs that define the pipeline to run
 type CRDs struct {
+	PipelineRuns      map[string]pipeline.PipelineRun
 	Pipelines         map[string]pipeline.Pipeline
 	Tasks             map[string]pipeline.Task
 	PipelineResources map[string]pipeline.PipelineResource
@@ -19,23 +20,25 @@ type CRDs struct {
 // NewCRDs create an empty CRDs
 func NewCRDs() CRDs {
 	return CRDs{
-		Pipelines: map[string]pipeline.Pipeline{},
-		Tasks:     map[string]pipeline.Task{},
+		PipelineRuns:      map[string]pipeline.PipelineRun{},
+		Pipelines:         map[string]pipeline.Pipeline{},
+		Tasks:             map[string]pipeline.Task{},
+		PipelineResources: map[string]pipeline.PipelineResource{},
 	}
 }
 
-// GetPipeline get a pipeline by name, or default one is there's only one declared
-func (c CRDs) GetPipeline(name string) (pipeline.Pipeline, error) {
-	p, ok := c.Pipelines[name]
+// GetPipelineRun get a PipelineRun by name, or default one is there's only one declared
+func (c CRDs) GetPipelineRun(name string) (pipeline.PipelineRun, error) {
+	p, ok := c.PipelineRuns[name]
 	if ok {
 		return p, nil
 	}
-	if name == "" && len(c.Pipelines) == 1 {
-		for _, p := range c.Pipelines {
+	if name == "" && len(c.PipelineRuns) == 1 {
+		for _, p := range c.PipelineRuns {
 			return p, nil
 		}
 	}
-	return p, fmt.Errorf("No pipeline with name '%s'\n", name)
+	return p, fmt.Errorf("no PipelineRun with name '%s'", name)
 }
 
 // ParseCRDs convert yaml files in folder into a set of CRDs
@@ -70,6 +73,10 @@ func ParseCRDs(r io.Reader) (*CRDs, error) {
 			to := pipeline.PipelineResource{}
 			fulldecoder.Decode(&to)
 			crds.PipelineResources[to.Name] = to
+		case "PipelineRun":
+			to := pipeline.PipelineRun{}
+			fulldecoder.Decode(&to)
+			crds.PipelineRuns[to.Name] = to
 		default:
 			return nil, fmt.Errorf("unsupported CRD 🧐 " + t.Kind)
 		}
