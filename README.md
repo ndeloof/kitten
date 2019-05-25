@@ -18,7 +18,7 @@ This project mostly started as an exercice to
 improve my Go skills. But I imagine it can be used
 to run local tests of your Tekton pipeline.
 
-This projet use raw Tekton CRDs, it doesn't define any higher level syntax 
+This project use raw Tekton CRDs, it doesn't define any higher level syntax 
 to define your CI/CD process. Other open source projects such as [Jenkins X](https://jenkinsx.io)), have already integrated Tekton as the default pipeline engine.
 
 ## Installing
@@ -26,6 +26,7 @@ to define your CI/CD process. Other open source projects such as [Jenkins X](htt
 
 ## Testing Your Pipeline
 [need examples of testing a local pipeline ]
+
 ###  Why a Kitty Cat Logo?
 You've probably seen the Tekton logo, which is a robot cat. These days most Kubernetes-related project names start with the letter `K`, we did the same thing.
 
