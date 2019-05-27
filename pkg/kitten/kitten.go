@@ -8,9 +8,12 @@ import (
 	"github.com/goware/prefixer"
 	pipeline "github.com/tektoncd/pipeline/pkg/apis/pipeline/v1alpha1"
 	"github.com/tektoncd/pipeline/pkg/reconciler/v1alpha1/pipeline/dag"
+	k8s "k8s.io/api/core/v1"
 
+	"encoding/json"
 	"fmt"
 	"github.com/docker/docker/client"
+	message "github.com/docker/docker/pkg/jsonmessage"
 	"github.com/ndeloof/kitten/pkg/crds"
 	"io"
 	"os"
@@ -91,7 +94,42 @@ func RunTask(ctx context.Context, pt pipeline.PipelineTask, task pipeline.Task, 
 		cmd = append(cmd, s.Command...)
 		cmd = append(cmd, s.Args...)
 
-		cli.ImagePull(ctx, s.Image, types.ImagePullOptions{})
+		pull := s.ImagePullPolicy == k8s.PullAlways
+		if s.ImagePullPolicy != k8s.PullNever {
+			_, _, err := cli.ImageInspectWithRaw(ctx, s.Image)
+			if err != nil {
+				if client.IsErrNotFound(err) {
+					pull = true
+				} else {
+					return 0, fmt.Errorf("can't inspect image. %v", err)
+				}
+			}
+		}
+
+		if pull {
+			fmt.Printf("Pulling Docker image %s\n", s.Image)
+			resp, err := cli.ImagePull(ctx, s.Image, types.ImagePullOptions{})
+			if err != nil {
+				return 0, fmt.Errorf("can't pull docker image. %v", err)
+			}
+			defer resp.Close()
+			decoder := json.NewDecoder(resp)
+			for {
+				var msg message.JSONMessage
+				err := decoder.Decode(&msg)
+				if err == io.EOF {
+					// Completed
+					break
+				}
+				if err != nil {
+					return 0, fmt.Errorf("failed to pull docker image. %v", err)
+				}
+				if msg.Error != nil {
+					return 0, fmt.Errorf("failed to pull docker image. %v", msg.Error)
+				}
+				fmt.Println(msg.ProgressMessage)
+			}
+		}
 
 		c, err := cli.ContainerCreate(ctx,
 			&container.Config{

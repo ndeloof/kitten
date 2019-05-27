@@ -1,4 +1,12 @@
 apiVersion: tekton.dev/v1alpha1
+kind: PipelineRun
+metadata:
+  name: demo
+spec:
+  pipelineRef:
+    name: sample-pipeline
+---
+apiVersion: tekton.dev/v1alpha1
 kind: Pipeline
 metadata:
   name: sample-pipeline
@@ -15,5 +23,5 @@ metadata:
 spec:
   steps:
   - name: foo
-    image: alpine
+    image: ubuntu
     command: ['echo', 'hello foo']
